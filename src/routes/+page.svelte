@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { Recorder, type RecorderEvent } from "$lib/recorder/recorder";
   import { transcribe, type TranscribeEvent } from "$lib/transcribe/transcribe";
   import {
@@ -7,6 +8,12 @@
     summarizeCancel,
     type SummarizeEvent,
   } from "$lib/summarize/summarize";
+  import {
+    getConfig as getNotionConfig,
+    setConfig as setNotionConfig,
+    clearConfig as clearNotionConfig,
+    exportToNotion,
+  } from "$lib/notion/notion";
 
   type Phase =
     | "idle"
@@ -33,9 +40,20 @@
   let fullText = $state("");
 
   // summarize state
-  let summarizeStatus = $state(""); // "モデルDL中…" 等
+  let summarizeStatus = $state("");
   let streamingSummary = $state("");
   let finalSummary = $state("");
+
+  // notion state
+  let notionConfigured = $state(false);
+  let notionParentId = $state<string | null>(null);
+  let notionModalOpen = $state(false);
+  let notionTokenInput = $state("");
+  let notionParentInput = $state("");
+  let notionSaving = $state(false);
+  let notionModalError = $state("");
+  let notionExporting = $state(false);
+  let notionResultUrl = $state("");
 
   let recorder: Recorder | null = null;
   let timerId: ReturnType<typeof setInterval> | null = null;
@@ -68,6 +86,22 @@
     return `${m}:${s}`;
   }
 
+  async function refreshNotionStatus() {
+    try {
+      const s = await getNotionConfig();
+      notionConfigured = s.configured;
+      notionParentId = s.parent_page_id;
+    } catch (e) {
+      // keychain アクセス拒否などのケース。UI は未設定扱いにする。
+      notionConfigured = false;
+      notionParentId = null;
+    }
+  }
+
+  onMount(() => {
+    refreshNotionStatus();
+  });
+
   function onRecorderEvent(e: RecorderEvent) {
     if (e.type === "level") level = e.rms;
     else if (e.type === "error") {
@@ -87,6 +121,7 @@
     summarizeStatus = "";
     streamingSummary = "";
     finalSummary = "";
+    notionResultUrl = "";
 
     recorder = new Recorder(onRecorderEvent);
     try {
@@ -177,6 +212,7 @@
     streamingSummary = "";
     finalSummary = "";
     errorMessage = "";
+    notionResultUrl = "";
 
     try {
       await summarize(fullText, (e: SummarizeEvent) => {
@@ -206,7 +242,6 @@
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "cancelled") {
-        // cancel ボタンで止めた場合は静かに transcribed に戻す
         phase = "transcribed";
         streamingSummary = "";
         summarizeStatus = "";
@@ -221,7 +256,70 @@
     try {
       await summarizeCancel();
     } catch {
-      // 失敗してもUIには出さない (summarize 側で cancelled エラーが上がる)
+      // ignore
+    }
+  }
+
+  function openNotionModal() {
+    notionTokenInput = "";
+    notionParentInput = notionParentId ?? "";
+    notionModalError = "";
+    notionModalOpen = true;
+  }
+
+  function closeNotionModal() {
+    notionModalOpen = false;
+    notionTokenInput = "";
+    notionModalError = "";
+  }
+
+  async function saveNotionSettings() {
+    if (notionSaving) return;
+    notionSaving = true;
+    notionModalError = "";
+    try {
+      await setNotionConfig(notionTokenInput, notionParentInput);
+      await refreshNotionStatus();
+      notionModalOpen = false;
+      notionTokenInput = "";
+    } catch (e) {
+      notionModalError = e instanceof Error ? e.message : String(e);
+    } finally {
+      notionSaving = false;
+    }
+  }
+
+  async function clearNotionSettings() {
+    try {
+      await clearNotionConfig();
+      await refreshNotionStatus();
+      notionResultUrl = "";
+    } catch (e) {
+      errorMessage = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function doNotionExport() {
+    if (notionExporting || !finalSummary) return;
+    notionExporting = true;
+    notionResultUrl = "";
+    errorMessage = "";
+    try {
+      const startedIso = new Date(startedAt || Date.now()).toISOString();
+      const r = await exportToNotion(startedIso, finalSummary);
+      notionResultUrl = r.url;
+    } catch (e) {
+      errorMessage = e instanceof Error ? e.message : String(e);
+    } finally {
+      notionExporting = false;
+    }
+  }
+
+  async function openExternal(url: string) {
+    try {
+      await openUrl(url);
+    } catch {
+      // ignore
     }
   }
 
@@ -238,6 +336,7 @@
     summarizeStatus = "";
     streamingSummary = "";
     finalSummary = "";
+    notionResultUrl = "";
   }
 
   async function copyFullText() {
@@ -368,7 +467,35 @@
         <div class="btn-row right">
           <button class="link" onclick={copySummary}>コピー</button>
           <button class="ghost-sm" onclick={runSummarize}>再要約</button>
+          {#if notionConfigured}
+            <button
+              class="primary"
+              onclick={doNotionExport}
+              disabled={notionExporting}
+            >
+              {notionExporting ? "出力中…" : "📤 Notion に出力"}
+            </button>
+          {:else}
+            <button class="ghost-sm" onclick={openNotionModal}>⚙️ Notion 連携を設定</button>
+          {/if}
         </div>
+
+        {#if notionResultUrl}
+          <div class="notion-result">
+            <span>✅ Notion に出力しました</span>
+            <button class="link" onclick={() => openExternal(notionResultUrl)}>
+              ページを開く
+            </button>
+          </div>
+        {/if}
+
+        {#if notionConfigured}
+          <div class="notion-foot">
+            <span class="muted small">Notion 連携: 設定済み</span>
+            <button class="link tiny" onclick={openNotionModal}>変更</button>
+            <button class="link tiny" onclick={clearNotionSettings}>クリア</button>
+          </div>
+        {/if}
       {/if}
     </section>
   {/if}
@@ -386,6 +513,74 @@
     </section>
   {/if}
 </main>
+
+{#if notionModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    onclick={closeNotionModal}
+    onkeydown={(e) => e.key === "Escape" && closeNotionModal()}
+    tabindex="-1"
+  >
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div
+      class="modal"
+      role="document"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <h2>Notion 連携を設定</h2>
+      <p class="muted small">
+        Notion でインテグレーションを作成し、対象の親ページを Share でこのインテグレーションに共有してください。
+        トークンは macOS Keychain に安全に保存されます。
+      </p>
+      <button
+        class="link tiny"
+        onclick={() => openExternal("https://www.notion.so/my-integrations")}
+      >
+        インテグレーション作成ページを開く →
+      </button>
+
+      <label>
+        <span>インテグレーショントークン</span>
+        <input
+          type="password"
+          placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          bind:value={notionTokenInput}
+          autocomplete="off"
+        />
+      </label>
+
+      <label>
+        <span>親ページの URL または ID</span>
+        <input
+          type="text"
+          placeholder="https://www.notion.so/Your-Page-abcdef1234..."
+          bind:value={notionParentInput}
+          autocomplete="off"
+        />
+      </label>
+
+      {#if notionModalError}
+        <p class="modal-error">{notionModalError}</p>
+      {/if}
+
+      <div class="modal-actions">
+        <button class="ghost" onclick={closeNotionModal} disabled={notionSaving}>
+          キャンセル
+        </button>
+        <button
+          class="primary"
+          onclick={saveNotionSettings}
+          disabled={notionSaving || !notionTokenInput.trim() || !notionParentInput.trim()}
+        >
+          {notionSaving ? "保存中…" : "保存"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   :root {
@@ -520,6 +715,11 @@
     background: #f0f0f0;
   }
 
+  .link.tiny {
+    padding: 0.18rem 0.45rem;
+    font-size: 0.72rem;
+  }
+
   .primary {
     background: #2962ff;
     color: white;
@@ -528,7 +728,7 @@
     border-radius: 999px;
   }
 
-  .primary:hover {
+  .primary:hover:not(:disabled) {
     background: #1d4fd1;
   }
 
@@ -606,6 +806,7 @@
 
   .btn-row.right {
     justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .full,
@@ -630,6 +831,27 @@
     min-height: 180px;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: 0.82rem;
+  }
+
+  .notion-result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    background: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #1b5e20;
+  }
+
+  .notion-foot {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 0.25rem;
   }
 
   .result {
@@ -673,6 +895,76 @@
 
   .center {
     text-align: center;
+  }
+
+  /* Notion modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal {
+    background: #fff;
+    color: #1a1a1a;
+    border-radius: 12px;
+    padding: 1.25rem;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  }
+
+  .modal h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .modal label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.82rem;
+    color: #444;
+  }
+
+  .modal input {
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.88rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    background: #fff;
+    color: #1a1a1a;
+  }
+
+  .modal input:focus {
+    outline: 2px solid #2962ff;
+    outline-offset: -1px;
+  }
+
+  .modal-error {
+    margin: 0;
+    padding: 0.5rem 0.7rem;
+    background: #ffebee;
+    border: 1px solid #ffcdd2;
+    border-radius: 6px;
+    color: #b71c1c;
+    font-size: 0.82rem;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 0.4rem;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -728,6 +1020,23 @@
     }
     .muted {
       color: #aaa;
+    }
+    .notion-result {
+      background: #1b3a1f;
+      border-color: #2c5530;
+      color: #a5d6a7;
+    }
+    .modal {
+      background: #2a2a2a;
+      color: #f0f0f0;
+    }
+    .modal label {
+      color: #ccc;
+    }
+    .modal input {
+      background: #1f1f1f;
+      border-color: #444;
+      color: #f0f0f0;
     }
   }
 </style>
