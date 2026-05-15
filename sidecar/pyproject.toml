@@ -1,0 +1,13 @@
+[project]
+name = "memolo-sidecar"
+version = "0.1.0"
+description = "memolo の音声文字起こし sidecar (faster-whisper)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "faster-whisper>=1.0,<2",
+    "llama-cpp-python>=0.3,<0.4",
+    "huggingface-hub>=0.24",
+]
+
+[tool.uv]
+package = false
