@@ -2,6 +2,27 @@
 .claude/
 CLAUDE.md
 
+# Personal task tracking (CLAUDE.md workflow)
+tasks/
+
 # Environment variables
 .env
 .env.*
+!.env.example
+
+# Node / SvelteKit
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Tauri / Rust
+/src-tauri/target
+/src-tauri/gen/schemas
+
+# Sidecar (Python)
+/sidecar/.venv
+/sidecar/__pycache__
