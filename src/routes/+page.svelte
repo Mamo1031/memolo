@@ -408,6 +408,18 @@
     {/if}
   </div>
 
+  {#if phase === "idle"}
+    <div class="notion-settings">
+      {#if notionConfigured}
+        <span class="muted small">Notion: 設定済み</span>
+        <button class="link tiny" onclick={openNotionModal}>変更</button>
+        <button class="link tiny" onclick={clearNotionSettings}>クリア</button>
+      {:else}
+        <button class="ghost-sm" onclick={openNotionModal}>⚙️ Notion 連携を設定</button>
+      {/if}
+    </div>
+  {/if}
+
   {#if showTranscribe}
     <section class="block">
       <header class="block-head">
@@ -852,6 +864,14 @@
     align-items: center;
     justify-content: flex-end;
     margin-top: 0.25rem;
+  }
+
+  .notion-settings {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.5rem;
   }
 
   .result {
