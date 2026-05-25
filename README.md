@@ -59,7 +59,7 @@ npm run tauri dev
 | コマンド | 用途 |
 |---|---|
 | `npm run tauri dev` | 開発用起動 (ホットリロード) |
-| `npm run tauri build` | リリースビルド (.app / .dmg 生成、要 Slice 4+) |
+| `npm run tauri build` | リリースビルド (.app 生成。配布用の sidecar 同梱は未対応) |
 | `npm run check` | Svelte/TS 型チェック |
 | `cargo check` (in `src-tauri/`) | Rust コンパイル確認 |
 | `cd sidecar && uv sync` | Python 依存の追加・更新 |
