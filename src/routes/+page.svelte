@@ -532,21 +532,21 @@
     >
       <h2>Notion 連携を設定</h2>
       <p class="muted small">
-        Notion でインテグレーションを作成し、対象の親ページを Share でこのインテグレーションに共有してください。
+        Notion でコネクション（旧インテグレーション）を作成し、書き出し先の親ページの「•••」→「コネクトを追加」でそのコネクションを接続してください。
         トークンは macOS Keychain に安全に保存されます。
       </p>
       <button
         class="link tiny"
-        onclick={() => openExternal("https://www.notion.so/my-integrations")}
+        onclick={() => openExternal("https://www.notion.so/developers/connections")}
       >
-        インテグレーション作成ページを開く →
+        コネクション作成ページを開く →
       </button>
 
       <label>
-        <span>インテグレーショントークン</span>
+        <span>コネクションのトークン</span>
         <input
           type="password"
-          placeholder="secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          placeholder="ntn_xxxxxxxx… または secret_xxxxxxxx…"
           bind:value={notionTokenInput}
           autocomplete="off"
         />
