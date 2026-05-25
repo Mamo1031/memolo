@@ -199,7 +199,7 @@ fn markdown_to_blocks(markdown: &str) -> Vec<Value> {
 fn map_status_error(status: reqwest::StatusCode, body: &str) -> String {
     match status.as_u16() {
         401 => "Notion トークンが無効です。設定を見直してください。".into(),
-        404 => "親ページが見つからないか、integration と共有されていません。Notion 側の Share でこの integration をページに追加してください。".into(),
+        404 => "親ページが見つからないか、コネクションが接続されていません。Notion 側でこのページに「コネクトを追加」してください。".into(),
         429 => "Notion API のレート制限に達しました。少し待って再試行してください。".into(),
         _ => format!("Notion API エラー (HTTP {status}): {body}"),
     }
