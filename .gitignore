@@ -26,3 +26,11 @@ vite.config.ts.timestamp-*
 # Sidecar (Python)
 /sidecar/.venv
 /sidecar/__pycache__
+
+# Editor / IDE (VS Code: 共有する設定だけ追跡し、個人/マシン固有は無視)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
