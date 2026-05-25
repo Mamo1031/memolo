@@ -1,11 +1,13 @@
 # memolo
 
-会議を録音し、**完全ローカル**で文字起こし・要約するデスクトップアプリ。
+会議を録音し、**文字起こし・要約まで完全ローカル**で行うデスクトップアプリ。
+生成した議事録は任意で Notion に書き出せる（**オンライン処理はこの Notion 出力のみ**で、録音・文字起こし・要約はすべてローカル完結）。
 8GB MacBook Air で動作することを目標に設計されている。
 
 - **録音**: WebAudio + AudioWorklet で PCM 取得 → Rust で WAV 保存
 - **文字起こし**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2 int8)
 - **要約**: ローカル LLM ([Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF) GGUF, Metal バックエンド)
+- **エクスポート (任意)**: 議事録を Notion ページに 1 クリックで出力
 
 ## 必要環境
 
@@ -75,6 +77,19 @@ printf '%s\n' '{"transcript":"..."}' | .venv/bin/python summarize.py
 ## 出力先
 
 録音 WAV: `~/Library/Application Support/app.memolo.desktop/recordings/<uuid>.wav`
+
+## Notion 連携 (任意)
+
+要約した議事録を Notion ページに書き出せる。**memolo がオンライン通信するのはこの機能だけ**で、録音・文字起こし・要約は完全ローカル。
+
+1. [Notion のコネクション設定](https://www.notion.so/developers/connections)で新しいコネクション（旧称インテグレーション）を作成し、**Internal Integration Secret**（`ntn_…` / `secret_…`）をコピー
+2. 書き出し先にしたい**親ページ**を Notion で開き、右上の **「•••」→「コネクトを追加」**で作成したコネクションを接続する（**未接続だと出力時に 404 になる**）
+3. memolo の待機中／要約完了画面の **「⚙️ Notion 連携を設定」**を開き、トークンと親ページの URL を入力して保存（初回は macOS Keychain の許可ダイアログが出る）
+
+出力するたびに、親ページの子ページとして `会議議事録 YYYY-MM-DD HH:MM` というページを新規作成する。議事録の `##` 見出し・箇条書きはそのまま Notion の見出し・リストに変換される。
+
+- **トークン保存先**: macOS Keychain (`app.memolo.desktop` / `notion-token`)
+- **親ページ ID 保存先**: `~/Library/Application Support/app.memolo.desktop/config.json`
 
 ## アーキテクチャ
 
